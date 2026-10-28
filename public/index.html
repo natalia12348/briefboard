@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Briefboard</title>
+  <meta name="description" content="Turn raw meeting notes into a prioritised Kanban, Scrum or Scrumban board.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%237a0f1e'/%3E%3Cpath d='M9 8h8a5 5 0 0 1 0 8H9zm0 8h9a4 4 0 0 1 0 8H9z' fill='%23f7f3ee'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="mark">B</span>
+      <div>
+        <h1>Briefboard</h1>
+        <p>Meeting notes, turned into a delivery board</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <span class="engine" id="engine" hidden></span>
+      <button class="btn ghost" data-export="markdown">Markdown</button>
+      <button class="btn ghost" data-export="csv">CSV</button>
+      <button class="btn ghost" data-export="json">JSON</button>
+      <button class="btn ghost" id="print">Print</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="intake">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Meeting notes</h2>
+          <div class="samples">
+            <button class="link" data-sample="en">EN sample</button>
+            <button class="link" data-sample="pl">PL sample</button>
+          </div>
+        </div>
+        <textarea id="notes" spellcheck="false" placeholder="Paste minutes, bullet points or a transcript.&#10;&#10;Anna: finalize mockups by Friday&#10;Piotr will fix the login bug ASAP&#10;[x] Marek: set up staging"></textarea>
+
+        <div class="fields">
+          <label>
+            <span>Method</span>
+            <select id="method">
+              <option value="kanban">Kanban</option>
+              <option value="scrum">Scrum</option>
+              <option value="scrumban">Scrumban</option>
+            </select>
+          </label>
+          <label id="velocity-field" hidden>
+            <span>Velocity (pts)</span>
+            <input id="velocity" type="number" min="1" max="200" value="20">
+          </label>
+        </div>
+
+        <button class="btn primary wide" id="generate">Generate board</button>
+        <p class="hint">Owners, dates, priorities, estimates and status are detected in English and Polish. Nothing leaves the server unless an LLM endpoint is configured.</p>
+      </div>
+    </aside>
+
+    <section class="stage">
+      <div class="kpis" id="kpis"></div>
+      <div class="board" id="board"></div>
+
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="insights" role="tab">Insights</button>
+        <button class="tab" data-tab="notes" role="tab">Decisions &amp; risks</button>
+        <button class="tab" data-tab="playbook" role="tab">Agile playbook</button>
+      </div>
+      <div class="tabpane" id="pane-insights"></div>
+      <div class="tabpane" id="pane-notes" hidden></div>
+      <div class="tabpane" id="pane-playbook" hidden></div>
+    </section>
+  </main>
+
+  <dialog id="editor">
+    <form method="dialog" id="editor-form">
+      <h3 id="editor-title">Card</h3>
+      <label><span>Title</span><input name="title" required maxlength="240"></label>
+      <div class="row">
+        <label><span>Owner</span><input name="owner" maxlength="40"></label>
+        <label><span>Due</span><input name="due" type="date"></label>
+      </div>
+      <div class="row">
+        <label><span>Priority</span>
+          <select name="priority">
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </label>
+        <label><span>Type</span>
+          <select name="kind">
+            <option value="task">Task</option>
+            <option value="feature">Feature</option>
+            <option value="bug">Bug</option>
+            <option value="spike">Spike</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <label><span>Story points</span>
+          <select name="points">
+            <option>1</option><option>2</option><option>3</option>
+            <option>5</option><option>8</option><option>13</option>
+          </select>
+        </label>
+        <label><span>Column</span><select name="column"></select></label>
+      </div>
+      <label><span>Labels</span><input name="labels" placeholder="design, blocked"></label>
+      <div class="dialog-actions">
+        <button type="button" class="btn danger" id="editor-delete">Delete</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn ghost" id="editor-cancel">Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>
