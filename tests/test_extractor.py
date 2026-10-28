@@ -80,3 +80,27 @@ def test_ignores_chatter():
 def test_deduplicates():
     notes = "Action items:\n- Anna: send report\n- Anna: send report"
     assert len(extractor.extract(notes, REF)["cards"]) == 1
+
+
+def test_informal_polish_without_diacritics():
+    notes = (
+        "Natalia ma zrobic 3 pojkty alan 8 i ma dodac wtyczki a klaudia przysoady\n"
+        "w progresie maciekj juz robi ayutio\n"
+        "\n"
+        "maciek juz robi auto"
+    )
+    cards = extractor.extract(notes, REF)["cards"]
+    assert [(c.owner, c.column) for c in cards] == [
+        ("Natalia", "todo"),
+        ("Natalia", "todo"),
+        ("Klaudia", "todo"),
+        ("Maciekj", "doing"),
+        ("Maciek", "doing"),
+    ]
+    assert cards[1].title == "Dodac wtyczki"
+    assert cards[2].title == "Przysoady"
+
+
+def test_english_pronouns_are_not_owners():
+    cards = extractor.extract("We will ship the release on Friday", REF)["cards"]
+    assert all(c.owner is None for c in cards)

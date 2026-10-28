@@ -49,7 +49,8 @@ LARGE = re.compile(
 )
 DONE = re.compile(
     r"\b(done|completed|finished|shipped|released|zrobione|zrobiony|zrobiona|gotowe|"
-    r"gotowy|ukończon\w*|zakończon\w*|wdrożon\w*)\b",
+    r"gotowy|ukończon\w*|zakończon\w*|wdrożon\w*|skończon\w*|skonczon\w*|"
+    r"ukonczon\w*|zakonczon\w*|wdrozon\w*)\b",
     re.I,
 )
 NOT_YET_DONE = re.compile(r"\b(?:to be|needs? to be|when|until|once|before|po)\s+done\b", re.I)
@@ -59,8 +60,9 @@ REVIEW = re.compile(
     re.I,
 )
 DOING = re.compile(
-    r"\b(in progress|working on|started|ongoing|wip|w trakcie|w toku|pracuje nad|"
-    r"pracuję nad|rozpoczęt\w*|trwa)\b",
+    r"\b(in progress|working on|started|ongoing|wip|doing|w trakcie|w toku|w progresie|"
+    r"w progress|pracuje|pracuję|pracują|robi|robię|robią|realizuje|rozpoczęt\w*|"
+    r"rozpoczet\w*|trwa)\b",
     re.I,
 )
 BLOCKED = re.compile(

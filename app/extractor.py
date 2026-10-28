@@ -65,6 +65,9 @@ STOP_OWNERS = {
     "uwagi", "notatki", "ustalenia", "podsumowanie", "akcja", "akcje", "priorytet",
     "status", "spotkanie", "meeting", "attendees", "uczestnicy", "obecni", "date", "data",
     "topic", "temat", "owner", "deadline", "termin", "budget", "budżet",
+    "we", "i", "you", "they", "it", "he", "she", "this", "that", "there", "who", "my",
+    "wy", "oni", "ona", "on", "to", "co", "kto", "ktos", "ktoś", "team", "ma", "musi",
+    "robi", "jest", "też", "nie", "juz", "już", "teraz", "now", "and", "then",
 }
 
 SECTIONS = {
@@ -98,6 +101,7 @@ CUES = re.compile(
     r"implement|create|update|schedule|draft|investigate|check|deliver|finish|complete|"
     r"write|set up|setup|confirm|contact|organi[sz]e|book|share|deploy|test|migrate|"
     r"refactor|build|add|design|document|plan|resolve|finalize|finalise|research|"
+    r"robi|robię|robią|pracuje|zrobic|dodac|naprawic|przygotowac|wyslac|sprawdzic|"
     r"musi|powinien|powinna|trzeba|należy|przygotuj\w*|wyślij\w*|wyśl\w*|napraw\w*|"
     r"zaimplementuj\w*|wdroż\w*|stwórz|stworz\w*|zaktualizuj\w*|zaplanuj\w*|sprawdz\w*|"
     r"sprawdź|dostarcz\w*|dokończ\w*|ukończ\w*|napisz\w*|skontaktuj\w*|zorganizuj\w*|"
@@ -120,6 +124,34 @@ WILL_OWNER = re.compile(
     r"zajmie się|przygotuje|wyśle|zrobi|sprawdzi|zadba o|skontaktuje się z|zorganizuje|"
     r"dostarczy|ma)\s+(.+)$"
 )
+
+
+STATUS_PREFIX = re.compile(
+    r"^(?:w progresie|w progress|in progress|w trakcie|w toku|zrobione|gotowe|done)\s*[:\-–]?\s+",
+    re.I,
+)
+LOOSE_OWNER = re.compile(
+    r"^([^\W\d_]{2,24})\s+(?:(?:juz|już|teraz|now|already)\s+)?"
+    r"(?:ma|musi|robi|zrobi|pracuje|will|should|must)\s+(.+)$",
+    re.I,
+)
+NAMELESS_OWNER = re.compile(r"^([^\W\d_]{2,24})\s+(.+)$")
+LEADING_MODAL = re.compile(r"^(?:ma|musi|will|should|must|needs to)\s+", re.I)
+AND_SPLIT = re.compile(
+    r"\s+(?:i|oraz|and|then|potem)\s+(?=(?:ma|musi|will|should|must|needs to)\b)", re.I
+)
+CONTRAST_SPLIT = re.compile(r"\s+a\s+(?=[^\W\d_]{2,24}\s+\S)", re.I)
+POLISH_TASK = re.compile(r"\b(?:ma|musi|robi|zrobi\w*|zrobić|zrobic)\b", re.I)
+
+
+def split_clauses(text: str) -> list[tuple[str, str]]:
+    segments = CONTRAST_SPLIT.split(text) if POLISH_TASK.search(text) else [text]
+    result = []
+    for si, segment in enumerate(segments):
+        for pi, piece in enumerate(AND_SPLIT.split(segment)):
+            kind = "first" if si == 0 and pi == 0 else "contrast" if pi == 0 else "and"
+            result.append((kind, piece.strip()))
+    return result
 
 
 def parse_due(text: str, ref: date) -> tuple[Optional[date], str]:
@@ -175,6 +207,10 @@ def split_owner(text: str, participants: set[str], in_actions: bool) -> tuple[Op
     m = WILL_OWNER.match(text)
     if m and m.group(1).lower() not in STOP_OWNERS:
         return m.group(1), m.group(2)
+    m = LOOSE_OWNER.match(text)
+    if m and m.group(1).lower() not in STOP_OWNERS:
+        name = m.group(1)
+        return name[:1].upper() + name[1:], m.group(2)
     m = TRAILING_OWNER.search(text)
     if m and m.group(1).lower() not in STOP_OWNERS:
         return m.group(1), text[: m.start()]
@@ -193,6 +229,7 @@ def clean_title(text: str) -> str:
     text = re.sub(r"(?:\s*,){2,}", ",", text)
     text = re.sub(r"\s+", " ", text)
     text = re.sub(r"^[\s,;:–—-]+|[\s,;:–—-]+$", "", text)
+    text = LEADING_MODAL.sub("", text)
     text = text.rstrip(".")
     if len(text) > 140:
         text = text[:137].rstrip() + "..."
@@ -236,20 +273,38 @@ def extract(notes: str, ref: date) -> dict:
         if text and text not in bucket:
             bucket.append(text[:1].upper() + text[1:])
 
-    def add_card(text: str, checked: bool, forced: bool, in_actions: bool) -> bool:
+    def add_card(
+        text: str,
+        checked: bool,
+        forced: bool,
+        in_actions: bool,
+        owner_hint: Optional[str] = None,
+        loose_name: bool = False,
+    ) -> Optional[Card]:
         source = text
+        prefix = STATUS_PREFIX.match(text)
+        if prefix:
+            forced = True
+            text = text[prefix.end():]
         owner, body = split_owner(text, participants, in_actions)
+        if owner is None and owner_hint:
+            owner = owner_hint
+        if owner is None and loose_name:
+            named = NAMELESS_OWNER.match(text)
+            if named and named.group(1).lower() not in STOP_OWNERS:
+                owner = named.group(1)[:1].upper() + named.group(1)[1:]
+                body = named.group(2)
         due, body = parse_due(body, ref)
-        has_cue = bool(CUES.search(body))
+        has_cue = bool(CUES.search(source))
         if not (forced or in_actions or (owner and has_cue) or (has_cue and due)):
-            return False
+            return None
         labels = [tag.lower() for tag in HASHTAG.findall(body)]
         points = explicit_points(body)
         column = infer_column(source, checked, bool(owner or due))
         title = clean_title(body)
         key = re.sub(r"\W+", " ", title.lower()).strip()
         if len(title) < 3 or key in seen:
-            return False
+            return None
         seen.add(key)
         cards.append(
             make_card(
@@ -264,7 +319,7 @@ def extract(notes: str, ref: date) -> dict:
                 labels=labels,
             )
         )
-        return True
+        return cards[-1]
 
     for raw in notes.splitlines():
         line = raw.strip()
@@ -311,7 +366,18 @@ def extract(notes: str, ref: date) -> dict:
             if current == "questions" or QUESTION.match(text) or text.endswith("?"):
                 add_note(questions, QUESTION.sub("", text))
                 continue
-            add_card(text, checked, forced, current == "actions")
+            first_owner = None
+            for kind, clause in split_clauses(text):
+                card = add_card(
+                    clause,
+                    checked,
+                    forced or kind != "first",
+                    current == "actions",
+                    owner_hint=first_owner if kind == "and" else None,
+                    loose_name=kind == "contrast",
+                )
+                if kind == "first":
+                    first_owner = card.owner if card else None
 
     return {
         "cards": cards,
