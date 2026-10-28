@@ -104,3 +104,15 @@ def test_informal_polish_without_diacritics():
 def test_english_pronouns_are_not_owners():
     cards = extractor.extract("We will ship the release on Friday", REF)["cards"]
     assert all(c.owner is None for c in cards)
+
+
+def test_pipe_separator_and_past_tense_done():
+    notes = "Natalia ma zrobic 3 projekty | Alan ma zrobic wtyczke\n\nMarta she did already"
+    cards = extractor.extract(notes, REF)["cards"]
+    assert [(c.owner, c.column) for c in cards] == [
+        ("Natalia", "todo"),
+        ("Alan", "todo"),
+        ("Marta", "done"),
+    ]
+    assert cards[0].title == "Zrobic 3 projekty"
+    assert cards[1].title == "Zrobic wtyczke"
